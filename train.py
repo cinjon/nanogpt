@@ -33,6 +33,7 @@ from model import GPTConfig, GPT
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
+out_ckpt_suffix = ''
 eval_interval = 2000
 log_interval = 1
 eval_iters = 200
@@ -155,7 +156,7 @@ if init_from == 'scratch':
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt%s.pt' % out_ckpt_suffix)
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
     # force these config attributes to be equal otherwise we can't even resume training
@@ -280,7 +281,8 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt.pt'))
+                ckpt_path = os.path.join(out_dir, 'ckpt%s.pt' % out_ckpt_suffix)
+                torch.save(checkpoint, ckpt_path)
     if iter_num == 0 and eval_only:
         break
 
