@@ -445,12 +445,17 @@ class GPT(nn.Module):
                  max_new_tokens,
                  temperature=1.0,
                  top_k=None,
-                 top_p=None):
+                 top_p=None,
+                 return_probs=False):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        if return_probs:
+            probs_all = []
+            probs_chosen = []
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = self.get_idx_cond(idx)
@@ -462,6 +467,14 @@ class GPT(nn.Module):
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
+            if return_probs:
+                # This is added for speculative sampling, but could be used for
+                # other purposes as well.
+                probs_all.append(probs[:, None])
+                probs_chosen.append(probs.gather(dim=-1, index=idx_next))
+
+        if return_probs:
+            return idx, probs_all, probs_chosen
         return idx
 
     @torch.no_grad()
