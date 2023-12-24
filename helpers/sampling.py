@@ -238,7 +238,8 @@ def speculative_sampling(target_model,
             idx = torch.cat((idx, sample), dim=1)
         else:
             # The first rejection is when accept = False, i.e the first argmin.
-            first_rejection = torch.argmin(accept, dim=1)
+            # On mps, argmin works, but not on cuda. So we first cast to int().
+            first_rejection = torch.argmin(accept.to(torch.uint8), dim=1)
             # Cull from idx everything that wasn't before the first rejection.
             idx = idx[:, :first_rejection[0] - draft_length]
             # Get the (target - draft)_+ distribution to sample from.
