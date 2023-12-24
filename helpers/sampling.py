@@ -11,26 +11,26 @@ See sample.py for usage examples.
 import torch
 from torch.nn import functional as F
 
-"""
-Mask logits according to the top_p algorithm (https://arxiv.org/abs/1904.09751).
 
-The algorithm adds indices in descending order of probability until the total 
-probability >= p. It then masks the logits of indices that aren't included in
-this summation. We mask by setting the logits to -inf.
-
-Usage:
-    logits, _ = model(idx)
-    logits = top_p(logits, p=0.95)
-
-Args:
-- logits: Unnormalized float logits of size [batch_size, ..., d]. It's assumed 
-  that we are computing over the last index.
-- p: A float probability mass to reach.
-
-Returns:
-- logits: The masked logits.
-"""
 def top_p(logits, p=0.95):
+    """Mask logits according to the top_p algorithm (https://arxiv.org/abs/1904.09751).
+
+    The algorithm adds indices in descending order of probability until the total 
+    probability >= p. It then masks the logits of indices that aren't included in
+    this summation. We mask by setting the logits to -inf.
+
+    Usage:
+        logits, _ = model(idx)
+        logits = top_p(logits, p=0.95)
+
+    Args:
+    - logits: Unnormalized float logits of size [batch_size, ..., d]. It's assumed 
+    that we are computing over the last index.
+    - p: A float probability mass to reach.
+
+    Returns:
+    - logits: The masked logits.
+    """
     # Get probs / indices in descending order, along with cumulative sum.
     probs = torch.softmax(logits, dim=-1)
     top_values, top_indices = torch.sort(probs, dim=-1, descending=True)
@@ -48,36 +48,6 @@ def top_p(logits, p=0.95):
     return torch.masked_fill(logits, ~mask_scatter, -torch.inf)
 
 
-"""
-Run beam_search using the given model on the idx input.
-
-Usage:
-    results = beam_search(model, idx, max_new_tokens, num_beams=5, 
-                          temperature=1., top_k=None, top_p=0.95, 
-                          return_beams=False, return_log_probs=False)
-    max_beam = results['max_beam']
-
-Args:
-- model: A GPT model from model.py.
-- idx: A torch tensor of size [batch_size, seq_length] containing the input.
-- max_new_tokens: An int specifying the maximum number of tokens to generate.
-- num_beams: An int specifying the number of beams to use.
-- temperature: A float specifying the temperature to use.
-- top_k: An int specifying the number of top k to use. Don't run top_k if None 
-  or <= 0.
-- top_p: A float specifying the top p to use. Don't run if None, not between 0 
-  and 1, or if top_k is set.
-- return_beams: A boolean specifying whether to return the beams.
-- return_log_probs: A boolean specifying whether to return the log probs.
-
-Returns a dict that has the following keys:
-- max_beam: A torch tensor of size [batch_size, max_new_tokens + 1] containing
-  the most likely beam.
-- beams: None if not return_beams, else the final beams of size
-  [batch_size, num_beams, max_new_tokens + 1].
-- log_probs: None if not return_log_probs, else the log probs of the final 
-  beams, has size [batch_size, num_beams].
-"""
 def beam_search(model,
                 idx,
                 max_new_tokens,
@@ -87,6 +57,35 @@ def beam_search(model,
                 top_p=None,
                 return_beams=False,
                 return_log_probs=False):
+    """Run beam_search using the given model on the idx input.
+
+    Usage:
+        results = beam_search(model, idx, max_new_tokens, num_beams=5, 
+                            temperature=1., top_k=None, top_p=0.95, 
+                            return_beams=False, return_log_probs=False)
+        max_beam = results['max_beam']
+
+    Args:
+    - model: A GPT model from model.py.
+    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+    - max_new_tokens: An int specifying the maximum number of tokens to generate.
+    - num_beams: An int specifying the number of beams to use.
+    - temperature: A float specifying the temperature to use.
+    - top_k: An int specifying the number of top k to use. Don't run top_k if None 
+    or <= 0.
+    - top_p: A float specifying the top p to use. Don't run if None, not between 0 
+    and 1, or if top_k is set.
+    - return_beams: A boolean specifying whether to return the beams.
+    - return_log_probs: A boolean specifying whether to return the log probs.
+
+    Returns a dict that has the following keys:
+    - max_beam: A torch tensor of size [batch_size, max_new_tokens + 1] containing
+    the most likely beam.
+    - beams: None if not return_beams, else the final beams of size
+    [batch_size, num_beams, max_new_tokens + 1].
+    - log_probs: None if not return_log_probs, else the log probs of the final 
+    beams, has size [batch_size, num_beams].
+    """
     block_size = model.config.block_size
     batch_size, _ = idx.shape
     log_beam_probs = torch.zeros(batch_size, num_beams).to(idx.device)
@@ -149,33 +148,6 @@ def beam_search(model,
     return ret
 
 
-"""
-Run Speculative Sampling (https://arxiv.org/abs/2302.01318)
-
-This requires batch size = 1. Doing it with batch size > 1 is an optimization
-involving careful tracking of the lengths. We can do this later.
-
-Usage:
-    result = speculative_sampling(target_model, draft_model, draft_length, idx, 
-                                  max_new_tokens, temperature=1., top_k=None, 
-                                  top_p=None)
-
-Args:
-- target_model: A GPT model from model.py. This is a bigger model and is the
-  arbiter for whether to accept or reject a token.
-- draft_model: A GPT model from model.py. This is typically a much smaller model 
-  than the target model and is used to generate a draft sequence from which the
-  target model will accept or reject tokens.
-- draft_length: An int specifying the length of the draft sequence that the
-  draft model will generate before presenting to the target model.
-- idx: A torch tensor of size [batch_size, seq_length] containing the input.
-- max_new_tokens: An int specifying the maximum number of tokens to generate.
-- temperature: A float specifying the temperature to use.
-- top_k: An int specifying the number of top k to use. Don't run top_k if None
-  or <= 0.
-- top_p: A float specifying the top p to use. Don't run if None, not in (0, 1], 
-  or if top_k is set.
-"""
 def speculative_sampling(target_model,
                          draft_model,
                          draft_length,
@@ -184,7 +156,33 @@ def speculative_sampling(target_model,
                          temperature=1.,
                          top_k=None,
                          top_p=None):
-    assert(top_p > 0.)
+    """Run Speculative Sampling (https://arxiv.org/abs/2302.01318)
+
+    This requires batch size = 1. Doing it with batch size > 1 is an optimization
+    involving careful tracking of the lengths. We can do this later.
+
+    Usage:
+        result = speculative_sampling(target_model, draft_model, draft_length, idx, 
+                                    max_new_tokens, temperature=1., top_k=None, 
+                                    top_p=None)
+
+    Args:
+    - target_model: A GPT model from model.py. This is a bigger model and is the
+    arbiter for whether to accept or reject a token.
+    - draft_model: A GPT model from model.py. This is typically a much smaller model 
+    than the target model and is used to generate a draft sequence from which the
+    target model will accept or reject tokens.
+    - draft_length: An int specifying the length of the draft sequence that the
+    draft model will generate before presenting to the target model.
+    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+    - max_new_tokens: An int specifying the maximum number of tokens to generate.
+    - temperature: A float specifying the temperature to use.
+    - top_k: An int specifying the number of top k to use. Don't run top_k if None
+    or <= 0.
+    - top_p: A float specifying the top p to use. Don't run if None, not in (0, 1], 
+    or if top_k is set.
+    """
+    assert (top_p > 0.)
     batch_size, starting_seq_len = idx.shape
     assert (batch_size == 1)
 
@@ -214,7 +212,7 @@ def speculative_sampling(target_model,
                                              top_p)
         logits = logits[:, -draft_length - 1:]
         target_probs = torch.softmax(logits, dim=-1)
-        # target_probs_draft is the target_model's probabilities of the tokens 
+        # target_probs_draft is the target_model's probabilities of the tokens
         # chosen by the draft model. target_probs_end is the next token's probs.
         # We may not use it.
         target_probs_draft = target_probs[:, :-1].gather(
@@ -252,25 +250,3 @@ def speculative_sampling(target_model,
             sample = torch.multinomial(target_minus_draft, num_samples=1)
             idx = torch.cat((idx, sample), dim=1)
     return idx
-
-
-def test_top_p_indices():
-    batch_size = 2
-    seq_length = 3
-    vocab_size = 5
-    # TODO:
-    # 1. Test with only one choice.
-    # 2. Set a seed with even probs. Ensure that it comes back fixed.
-    # 3. Test with two choices at 0.6 and 0.4 and no seed. Run 100 times and make sure it
-    #     comes back with both choices possible when p = 0.8.
-    # 4. Do the same and make sure it comes back with only one choice when p = 0.6.
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-
-
-def test_beam_search():
-    pass
-
-
-def test_speculative_sampling():
-    pass

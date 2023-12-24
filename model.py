@@ -372,31 +372,28 @@ class GPT(nn.Module):
         mfu = flops_achieved / flops_promised
         return mfu
 
-    """Truncate the idx if its sequence size is greater than the block size."""
-
     def get_idx_cond(self, idx):
+        """Truncate the idx if its sequence size is greater than the block size."""
         if idx.size(1) <= self.config.block_size:
             return idx
         return idx[:, -self.config.block_size:]
 
-    """
-    A cls method to help with top_k and top_p. We are assuming v is of shape 
-    2 or 3.
-
-    Args:
-    - logits: A torch tensor of shape [batch_size, seq_length, vocab_size].
-    - top_k: Int specifying the number of top k to use. Don't run top_k if None 
-      or <= 0.
-    - top_p: Float specifying p for top_p. Don't run if None, not between 0 and 
-      1, or if top_k is set. See sampling.py's top_p for more details.
-
-    Returns:
-    - A torch tensor of shape [batch_size, seq_length, vocab_size] with the 
-      appropriate logits.
-    """
-
     @classmethod
     def get_top_k_top_p(cls, logits, top_k, top_p):
+        """A cls method to help with top_k and top_p. We are assuming v is of 
+        shape 2 or 3.
+
+        Args:
+        - logits: A torch tensor of shape [batch_size, seq_length, vocab_size].
+        - top_k: Int specifying the number of top k to use. Don't run top_k if None 
+        or <= 0.
+        - top_p: Float specifying p for top_p. Don't run if None, not between 0 and 
+        1, or if top_k is set. See sampling.py's top_p for more details.
+
+        Returns:
+        - A torch tensor of shape [batch_size, seq_length, vocab_size] with the 
+        appropriate logits.
+        """
         if top_k is not None and top_k > 0:
             v, _ = torch.topk(logits, min(top_k, logits.size(-1)), dim=-1)
             v = v[:, :, [-1]] if len(v.shape) == 3 else v[:, [-1]]
@@ -406,49 +403,42 @@ class GPT(nn.Module):
             logits = sampling.top_p(logits, p=top_p)
         return logits
 
-    """
-    Get the logits for the last token in the sequence. Apply top_k and top_p if
-    either is None.
-
-    Args:
-    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
-    - temperature: A float specifying the temperature to use.
-    - top_k: An int specifying the number of top k to use.
-    - top_p: A float specifying the top p to use.
-
-    Returns:
-    - A torch tensor of shape [batch_size, vocab_size] with the appropriate
-      logits.
-    """
-
     def get_last_logits(self, idx, temperature, top_k, top_p):
+        """Get the logits for the last token in the sequence. Apply top_k and 
+        top_p if either is None.
+
+        Args:
+        - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+        - temperature: A float specifying the temperature to use.
+        - top_k: An int specifying the number of top k to use.
+        - top_p: A float specifying the top p to use.
+
+        Returns:
+        - A torch tensor of shape [batch_size, vocab_size] with the appropriate
+        logits.
+        """
         logits, _ = self(idx, infer_last_only=True)
         logits = logits[:, -1, :] / temperature
         return self.get_top_k_top_p(logits, top_k, top_p)
 
-    """
-    Get the logits for all tokens in the sequence. Apply top_k and top_p if
-    either is None.
-
-    Args:
-    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
-    - temperature: A float specifying the temperature to use.
-    - top_k: An int specifying the number of top k to use.
-    - top_p: A float specifying the top p to use.
-
-    Returns:
-    - A torch tensor of shape [batch_size, vocab_size] with the appropriate
-      logits.
-    """
-
     def get_all_logits(self, idx, temperature, top_k, top_p):
+        """Get the logits for all tokens in the sequence. Apply top_k and top_p 
+        if either is None.
+
+        Args:
+        - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+        - temperature: A float specifying the temperature to use.
+        - top_k: An int specifying the number of top k to use.
+        - top_p: A float specifying the top p to use.
+
+        Returns:
+        - A torch tensor of shape [batch_size, vocab_size] with the appropriate
+        logits.
+        """
         logits, _ = self(idx, infer_last_only=False)
         logits /= temperature
         return self.get_top_k_top_p(logits, top_k, top_p)
 
-    # On Macbook M1, with top_p = 0.95, temperature = 0.8, max_tokens = 500,
-    # this is actually reasonably fast:
-    # Average / Min / Max generation time per (10) sample: 8.102 / 5.447 / 29.588
     @torch.no_grad()
     def generate(self,
                  idx,
@@ -474,23 +464,6 @@ class GPT(nn.Module):
 
         return idx
 
-    """
-    Generate a sequence of tokens using beam search. See beam_search in 
-    sampling.py for more details.
-
-    Args:
-    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
-    - max_new_tokens: An int specifying the maximum number of tokens to generate.
-    - num_beams: An int specifying the number of beams to use.
-    - temperature: A float specifying the temperature to use.
-    - top_k: An int specifying the number of top k to use.
-    - top_p: A float specifying the top p to use.
-
-    Returns:
-    - A torch tensor of shape [batch_size, max_new_tokens + 1] containing the
-      most likely beam.
-    """
-
     @torch.no_grad()
     def generate_with_beam_search(self,
                                   idx,
@@ -501,6 +474,21 @@ class GPT(nn.Module):
                                   top_p=None,
                                   return_beams=False,
                                   return_log_probs=False):
+        """Generate a sequence of tokens using beam search. See beam_search in 
+        sampling.py for more details.
+
+        Args:
+        - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+        - max_new_tokens: An int specifying the maximum number of tokens to generate.
+        - num_beams: An int specifying the number of beams to use.
+        - temperature: A float specifying the temperature to use.
+        - top_k: An int specifying the number of top k to use.
+        - top_p: A float specifying the top p to use.
+
+        Returns:
+        - A torch tensor of shape [batch_size, max_new_tokens + 1] containing the
+        most likely beam.
+        """
         return sampling.beam_search(model=self,
                                     idx=idx,
                                     max_new_tokens=max_new_tokens,
@@ -511,32 +499,6 @@ class GPT(nn.Module):
                                     return_beams=return_beams,
                                     return_log_probs=return_log_probs)
 
-    # DO A SPPED COMPARIOSN!!!
-    # On my macbook m1, this has teh following times when doing top_p = 0.95,
-    # temperature = 0.8, max_tokens = 500, spec_draft_length = 5
-    # Average / Min / Max generation time per (10) sample: 20.807 / 9.300 / 52.672
-    # Hmm.... TODO: Well obv this needs to go faster.
-    # I wonder if it's a matter of the gpu being really slow and having to put
-    # stuff in and out of memory... I think it might be tbh. I should load this
-    # onto a machine w more gpu ram.
-    """
-    Generate a sequence of tokens using speculative sampling. See sampling.py's
-    speculative_sampling for more details.
-
-    Args:
-    - draft_model: A GPT model from model.py.
-    - draft_length: An int specifying the length of the draft.
-    - idx: A torch tensor of size [batch_size, seq_length] containing the input.
-    - max_new_tokens: An int specifying the maximum number of tokens to generate.
-    - temperature: A float specifying the temperature to use.
-    - top_k: An int specifying the number of top k to use.
-    - top_p: A float specifying the top p to use.
-
-    Returns:
-    - A torch tensor of shape [batch_size, max_new_tokens + 1] containing the
-      sampled sentence.
-    """
-
     @torch.no_grad()
     def generate_with_speculative_sampling(self,
                                            draft_model,
@@ -546,6 +508,22 @@ class GPT(nn.Module):
                                            temperature=1.0,
                                            top_k=None,
                                            top_p=None):
+        """Generate a sequence of tokens using speculative sampling. See 
+        sampling.py's speculative_sampling for more details.
+
+        Args:
+        - draft_model: A GPT model from model.py.
+        - draft_length: An int specifying the length of the draft.
+        - idx: A torch tensor of size [batch_size, seq_length] containing the input.
+        - max_new_tokens: An int specifying the maximum number of tokens to generate.
+        - temperature: A float specifying the temperature to use.
+        - top_k: An int specifying the number of top k to use.
+        - top_p: A float specifying the top p to use.
+
+        Returns:
+        - A torch tensor of shape [batch_size, max_new_tokens + 1] containing the
+        sampled sentence.
+        """
         return sampling.speculative_sampling(target_model=self,
                                              draft_model=draft_model,
                                              draft_length=draft_length,
