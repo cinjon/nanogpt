@@ -5,7 +5,7 @@ Usage:
 
 With speculative sampling:
 python sample.py --out_dir=out-shakespeare-char --device=mps --out_ckpt_path='ckpt-blsz128-bs64-nl4-nh4-nmbd256-iters5k-drop01.pt' \
-    --use_speculative_sampling=True --draft_length=5 --draft_sample_ckpt='ckpt-blsz128-bs64-nl4-nh4-nmbd256-iters5k-drop01.pt'
+    --use_speculative_sampling=True --draft_length=5 --draft_sample_ckpt='ckpt-blsz128-bs64-nl2-nh4-nmbd128-iters5k-drop01.pt'
 
 With beam search:
 python sample.py --out_dir=out-shakespeare-char --device=mps --out_ckpt_path='ckpt-blsz128-bs64-nl4-nh4-nmbd256-iters5k-drop01.pt' \
@@ -21,7 +21,7 @@ python sample.py --out_dir=out-shakespeare-char --device=mps --out_ckpt_path='ck
 
 With both top_p and speculative sampling:
 python sample.py --out_dir=out-shakespeare-char --device=mps --out_ckpt_path='ckpt-blsz128-bs64-nl4-nh4-nmbd256-iters5k-drop01.pt' \
-    --use_speculative_sampling=True --draft_length=5 --draft_ckpt_path='ckpt-blsz128-bs64-nl4-nh4-nmbd256-iters5k-drop01.pt' \
+    --use_speculative_sampling=True --draft_length=5 --draft_ckpt_path='ckpt-blsz128-bs64-nl2-nh4-nmbd128-iters5k-drop01.pt' \
     --top_p=0.9
 """
 import os
@@ -160,9 +160,9 @@ with torch.no_grad():
                 log_probs = results['log_probs']
                 # shape of y_beams: [1, num_beams, max_new_tokens + 1]
                 for num_beam in range(num_beams):
-                    print('BEAM %d' % num_beam,
-                          'log_prob: %.3f' % log_probs[0, num_beam])
-                    print(decode(y_beams[0, num_beam].tolist()))
+                    print('\n----\nBEAM %d' % num_beam,
+                          'log_prob: %.3f:' % log_probs[0, num_beam])
+                    print(decode(y_beams[0, num_beam].tolist()).strip())
                 print('---------------')
             elif use_speculative_sampling:
                 y = model.generate_with_speculative_sampling(
