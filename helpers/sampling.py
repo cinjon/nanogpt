@@ -10,6 +10,7 @@ See sample.py for usage examples.
 """
 import torch
 from torch.nn import functional as F
+
 """
 Mask logits according to the top_p algorithm (https://arxiv.org/abs/1904.09751).
 
@@ -29,8 +30,6 @@ Args:
 Returns:
 - logits: The masked logits.
 """
-
-
 def top_p(logits, p=0.95):
     # Get probs / indices in descending order, along with cumulative sum.
     probs = torch.softmax(logits, dim=-1)
@@ -79,8 +78,6 @@ Returns a dict that has the following keys:
 - log_probs: None if not return_log_probs, else the log probs of the final 
   beams, has size [batch_size, num_beams].
 """
-
-
 def beam_search(model,
                 idx,
                 max_new_tokens,
@@ -176,11 +173,9 @@ Args:
 - temperature: A float specifying the temperature to use.
 - top_k: An int specifying the number of top k to use. Don't run top_k if None
   or <= 0.
-- top_p: A float specifying the top p to use. Don't run if None, not between 0
-  and 1, or if top_k is set.
+- top_p: A float specifying the top p to use. Don't run if None, not in (0, 1], 
+  or if top_k is set.
 """
-
-
 def speculative_sampling(target_model,
                          draft_model,
                          draft_length,
@@ -189,6 +184,7 @@ def speculative_sampling(target_model,
                          temperature=1.,
                          top_k=None,
                          top_p=None):
+    assert(top_p > 0.)
     batch_size, starting_seq_len = idx.shape
     assert (batch_size == 1)
 
@@ -218,7 +214,10 @@ def speculative_sampling(target_model,
                                              top_p)
         logits = logits[:, -draft_length - 1:]
         target_probs = torch.softmax(logits, dim=-1)
-        target_probs_dl = target_probs[:, :-1].gather(
+        # target_probs_draft is the target_model's probabilities of the tokens 
+        # chosen by the draft model. target_probs_end is the next token's probs.
+        # We may not use it.
+        target_probs_draft = target_probs[:, :-1].gather(
             dim=-1, index=idx_cond[:, -draft_length:, None])[:, :, 0]
         target_probs_end = target_probs[:, -1]
         draft_probs_chosen = torch.cat(draft_probs_chosen, dim=1)
@@ -226,7 +225,7 @@ def speculative_sampling(target_model,
         # Now get the accept probabilities. If all accept, then we can sample an
         # additional token. If not, then we need to first only keep up to what
         # was accepted and then sample a tokenfrom the (q - p)_+ distribution.
-        target_div_draft = target_probs_dl / (draft_probs_chosen + 1e-8)
+        target_div_draft = target_probs_draft / (draft_probs_chosen + 1e-8)
         target_div_draft = torch.min(target_div_draft,
                                      torch.ones_like(target_div_draft))
         random_uniform = torch.FloatTensor(batch_size, draft_length) \
